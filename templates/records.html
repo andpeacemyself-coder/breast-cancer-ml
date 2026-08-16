@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row">
+  <div class="col-md-6">
+    <h3>Add a Test Record</h3>
+    {% if errors %}
+      <div class="alert alert-danger">
+        <ul>
+        {% for e in errors %}
+          <li>{{ e }}</li>
+        {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label">Test Input</label>
+        <textarea required name="test_input" class="form-control" rows="4"></textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Result (optional)</label>
+        <input name="result" class="form-control" />
+      </div>
+      <button class="btn btn-primary" type="submit">Save Record</button>
+    </form>
+  </div>
+  <div class="col-md-6">
+    <h3>Your Records</h3>
+    {% if records %}
+      <ul class="list-group">
+      {% for r in records %}
+        <li class="list-group-item">
+          <div><strong>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</strong></div>
+          <div>{{ r.test_input }}</div>
+          {% if r.result %}
+            <div class="text-muted small">Result: {{ r.result }}</div>
+          {% endif %}
+        </li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-muted">No records yet. Add one using the form.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
