@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <h2>Register</h2>
+    {% if errors %}
+      <div class="alert alert-danger">
+        <ul>
+        {% for e in errors %}
+          <li>{{ e }}</li>
+        {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+    <form method="post" novalidate>
+      <div class="mb-3">
+        <label class="form-label">Username</label>
+        <input required minlength="3" name="username" class="form-control" />
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input required type="email" name="email" class="form-control" />
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Password</label>
+        <input required minlength="6" type="password" name="password" class="form-control" />
+      </div>
+      <button class="btn btn-primary" type="submit">Create account</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,64 +1,38 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Breast Cancer Prediction System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-between">
+{% extends "base.html" %}
+{% block content %}
+<div class="row align-items-center">
+  <div class="col-md-6">
+    <h1 class="display-5">BreastCareML</h1>
+    <p class="lead">Empowering early detection with machine learning, educating users, and providing an easy-to-use interface to log and review test data securely.</p>
+    <ul>
+      <li>Secure sign-up and sign-in</li>
+      <li>Personal dashboard with details</li>
+      <li>Record your test inputs to track results</li>
+    </ul>
+    <p>
+      <a class="btn btn-primary me-2" href="/register">Get Started</a>
+      <a class="btn btn-outline-primary" href="/login">Sign In</a>
+    </p>
+  </div>
+  <div class="col-md-6 text-center">
+    <img src="https://images.unsplash.com/photo-1526256262350-7da7584cf5eb?auto=format&fit=crop&w=800&q=60" alt="breast health" class="img-fluid rounded shadow">
+  </div>
+</div>
 
-    <header class="bg-indigo-600 text-white shadow-md py-6 px-8">
-        <div class="max-w-6xl mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold tracking-wide">Breast Cancer Prediction Portal</h1>
-            <span class="text-xs bg-indigo-500 px-3 py-1 rounded-full uppercase tracking-wider">AI Powered Diagnostics</span>
-        </div>
-    </header>
+<hr class="my-5">
 
-    <main class="max-w-4xl mx-auto px-6 py-10 w-full flex-grow">
-        <div class="bg-white rounded-xl shadow-lg p-8 border border-slate-100">
-            <h2 class="text-xl font-semibold text-slate-700 mb-2">Cellular Measurement Input Form</h2>
-            <p class="text-sm text-slate-500 mb-6">Enter the 30 laboratory feature measurements below to run the machine learning diagnosis prediction.</p>
-
-            {% if prediction_text %}
-            <div class="mb-8 p-4 rounded-lg text-center font-bold text-lg 
-                {% if 'M' in prediction_text %} bg-rose-100 text-rose-700 border border-rose-300 
-                {% else %} bg-emerald-100 text-emerald-700 border border-emerald-300 {% endif %}">
-                Prediction Result: {{ prediction_text }}
-            </div>
-            {% endif %}
-
-            <form action="/predict" method="POST" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                
-                {% set features = [
-                    'radius_mean', 'texture_mean', 'perimeter_mean', 'area_mean', 'smoothness_mean',
-                    'compactness_mean', 'concavity_mean', 'concave points_mean', 'symmetry_mean', 'fractal_dimension_mean',
-                    'radius_se', 'texture_se', 'perimeter_se', 'area_se', 'smoothness_se',
-                    'compactness_se', 'concavity_se', 'concave points_se', 'symmetry_se', 'fractal_dimension_se',
-                    'radius_worst', 'texture_worst', 'perimeter_worst', 'area_worst', 'smoothness_worst',
-                    'compactness_worst', 'concavity_worst', 'concave points_worst', 'symmetry_worst', 'fractal_dimension_worst'
-                ] %}
-
-                {% for feat in features %}
-                <div class="flex flex-col">
-                    <label for="{{ feat }}" class="text-xs font-medium text-slate-600 mb-1 uppercase tracking-wider">{{ feat.replace('_', ' ') }}</label>
-                    <input type="number" step="any" name="{{ feat }}" id="{{ feat }}" required 
-                        class="px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm">
-                </div>
-                {% endfor %}
-
-                <div class="col-span-full mt-6">
-                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-md shadow transition duration-200">
-                        Run Prediction
-                    </button>
-                </div>
-            </form>
-        </div>
-    </main>
-
-    <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
-        &copy; 2026 Breast Cancer Analysis Pipeline. Built with Flask and Tailwind CSS.
-    </footer>
-
-</body>
-</html>
+<div class="row">
+  <div class="col-md-4">
+    <h4>Our Mission</h4>
+    <p>To make early detection tools accessible and to collect anonymized data to improve model accuracy over time.</p>
+  </div>
+  <div class="col-md-4">
+    <h4>How it works</h4>
+    <p>Users register and can log test inputs. The records page stores each input to allow tracking and later analysis.</p>
+  </div>
+  <div class="col-md-4">
+    <h4>Privacy</h4>
+    <p>We store minimal personally-identifying information and secure passwords with strong hashing.</p>
+  </div>
+</div>
+{% endblock %}

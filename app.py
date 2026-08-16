@@ -1,81 +1,149 @@
+from fastapi import FastAPI, Request, Form, Depends
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy import create_engine
+from passlib.context import CryptContext
+from datetime import datetime
 import os
 
-from flask import Flask, render_template, request
-import joblib
-import numpy as np
+BASE_DIR = os.path.dirname(__file__)
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'db.sqlite3')}")
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
 
-app = Flask(__name__)
+app = FastAPI()
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Resolve the model path relative to this file so the app works no matter
-# which directory the server is launched from.
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, 'cancer_model.pkl')
+templates = Jinja2Templates(directory="templates")
 
-# The 30 cell-measurement features, in the exact order the model was trained on.
-FEATURE_NAMES = [
-    'radius_mean', 'texture_mean', 'perimeter_mean', 'area_mean', 'smoothness_mean',
-    'compactness_mean', 'concavity_mean', 'concave points_mean', 'symmetry_mean', 'fractal_dimension_mean',
-    'radius_se', 'texture_se', 'perimeter_se', 'area_se', 'smoothness_se',
-    'compactness_se', 'concavity_se', 'concave points_se', 'symmetry_se', 'fractal_dimension_se',
-    'radius_worst', 'texture_worst', 'perimeter_worst', 'area_worst', 'smoothness_worst',
-    'compactness_worst', 'concavity_worst', 'concave points_worst', 'symmetry_worst', 'fractal_dimension_worst',
-]
+# Database setup
+Base = declarative_base()
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Load the trained model once at startup, failing loudly with a clear message
-# rather than crashing with an opaque traceback if the file is missing/corrupt.
-try:
-    model = joblib.load(MODEL_PATH)
-    print(f"[startup] Loaded model from {MODEL_PATH}")
-except Exception as exc:  # noqa: BLE001 - surface any load failure clearly
-    model = None
-    print(f"[startup] WARNING: could not load model at {MODEL_PATH}: {exc}")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(80), unique=True, nullable=False)
+    email = Column(String(120), unique=True, nullable=False)
+    password_hash = Column(String(200), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    records = relationship("Record", back_populates="owner")
 
-@app.route('/')
-def home():
-    return render_template('index.html')
+    def verify_password(self, password: str) -> bool:
+        return pwd_context.verify(password, self.password_hash)
 
+class Record(Base):
+    __tablename__ = "records"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    test_input = Column(Text, nullable=False)
+    result = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    owner = relationship("User", back_populates="records")
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    if model is None:
-        return render_template(
-            'index.html',
-            prediction_text="Error: model not loaded. Ensure cancer_model.pkl is in the app root.",
-        )
+# Create tables
+Base.metadata.create_all(bind=engine)
 
+# Helpers
+def get_db():
+    db = SessionLocal()
     try:
-        # Read every feature, convert to float, and build a (1, 30) array.
-        input_data = [float(request.form[feat]) for feat in FEATURE_NAMES]
-        features_array = np.array([input_data], dtype=float)  # shape (1, 30)
+        yield db
+    finally:
+        db.close()
 
-        prediction = model.predict(features_array)[0]
+def get_current_user(request: Request, db=None):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    return db.query(User).filter(User.id == user_id).first()
 
-        # Model outputs 'M'/'B'; also tolerate a numeric convention (1 == malignant).
-        if prediction == 'M' or prediction == 1:
-            result_text = "Malignant (M)"
-        else:
-            result_text = "Benign (B)"
+# Routes
+@app.get("/")
+def index(request: Request):
+    # Landing page
+    return templates.TemplateResponse("index.html", {"request": request})
 
-        return render_template('index.html', prediction_text=result_text)
+@app.get("/register")
+def register_get(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request, "errors": []})
 
-    except KeyError as exc:
-        return render_template(
-            'index.html',
-            prediction_text=f"Error: missing feature value for {exc}.",
-        )
-    except ValueError:
-        return render_template(
-            'index.html',
-            prediction_text="Error: all 30 features must be valid numbers.",
-        )
-    except Exception as exc:  # noqa: BLE001 - last-resort guard for the request
-        return render_template('index.html', prediction_text=f"Error in prediction: {exc}")
+@app.post("/register")
+def register_post(request: Request, username: str = Form(...), email: str = Form(...), password: str = Form(...), db=Depends(get_db)):
+    errors = []
+    if len(username) < 3:
+        errors.append("Username must be at least 3 characters")
+    if "@" not in email or len(email) < 5:
+        errors.append("Enter a valid email address")
+    if len(password) < 6:
+        errors.append("Password must be at least 6 characters")
+    if db.query(User).filter((User.username == username) | (User.email == email)).first():
+        errors.append("User with that username or email already exists")
+    if errors:
+        return templates.TemplateResponse("register.html", {"request": request, "errors": errors})
+    user = User(username=username, email=email, password_hash=pwd_context.hash(password))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    request.session["user_id"] = user.id
+    return RedirectResponse(url="/dashboard", status_code=303)
 
+@app.get("/login")
+def login_get(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request, "error": None})
 
-if __name__ == '__main__':
-    # Port 5000 is reserved/occupied on many Windows 11 setups (Hyper-V/WSL2
-    # dynamic reservations -> WinError 10013), so default to 5001 and allow an
-    # override via the PORT environment variable.
-    port = int(os.environ.get('PORT', 5001))
-    app.run(debug=True, port=port)
+@app.post("/login")
+def login_post(request: Request, username: str = Form(...), password: str = Form(...), db=Depends(get_db)):
+    user = db.query(User).filter((User.username == username) | (User.email == username)).first()
+    if not user or not user.verify_password(password):
+        return templates.TemplateResponse("login.html", {"request": request, "error": "Invalid credentials"})
+    request.session["user_id"] = user.id
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/", status_code=303)
+
+@app.get("/dashboard")
+def dashboard(request: Request, db=Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse("dashboard.html", {"request": request, "user": user})
+
+@app.get("/records")
+def records_get(request: Request, db=Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+    records = db.query(Record).filter(Record.user_id == user.id).order_by(Record.created_at.desc()).all()
+    return templates.TemplateResponse("records.html", {"request": request, "user": user, "records": records, "errors": []})
+
+@app.post("/records")
+def records_post(request: Request, test_input: str = Form(...), result: str = Form(None), db=Depends(get_db)):
+    user = get_current_user(request, db)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+    errors = []
+    if not test_input or len(test_input.strip()) < 3:
+        errors.append("Test input must be at least 3 characters")
+    if errors:
+        records = db.query(Record).filter(Record.user_id == user.id).order_by(Record.created_at.desc()).all()
+        return templates.TemplateResponse("records.html", {"request": request, "user": user, "records": records, "errors": errors})
+    record = Record(user_id=user.id, test_input=test_input.strip(), result=(result or ""))
+    db.add(record)
+    db.commit()
+    return RedirectResponse(url="/records", status_code=303)
+
+# Simple startup message
+@app.on_event("startup")
+def startup_event():
+    print("FastAPI app initialized. Visit / to see the landing page.")
